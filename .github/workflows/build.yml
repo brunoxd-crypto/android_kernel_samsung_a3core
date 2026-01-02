@@ -1,4 +1,4 @@
-name: Compilar_Kernel_A03_V11_Final
+name: Compilar_Kernel_A03_V13_ZyC_Release
 on:
   workflow_dispatch:
 
@@ -18,42 +18,39 @@ jobs:
             make zip liblz4-tool lzop curl wget tar
           ln -sf /usr/bin/python2 /usr/bin/python
 
-      - name: Descargar_Compilador_Neutron_Clang
+      - name: Descargar_ZyC_Clang_desde_Release
         run: |
-          # Neutron es un reemplazo directo de Zyc, muy usado en MTK y Unisoc
-          # Lo bajamos como archivo comprimido para evitar errores de Git Username
-          mkdir /zyc
-          wget -q https://gist.githubusercontent.com/dakkshesh07/2ca3ca6463838449a6140c6095034b08/raw/neutron-clang.sh
-          bash neutron-clang.sh
-          # El script lo descarga en una carpeta llamada 'neutron', la movemos
-          mv /source/neutron/* /zyc/ || true
-          
+          # Usamos un release estable (ejemplo: versión 14 o 17 según disponibilidad)
+          # Este link es directo al binario comprimido para evitar errores de Git
+          mkdir -p /zyc
+          curl -LSs https://github.com/ZyC-S/ZyC-Clang/releases/download/17.0.0-20230904-release/ZyC-Clang-17.0.0-20230904-release.tar.gz | tar -xzC /zyc
+          # Verificamos que el binario exista
+          ls /zyc/bin/clang
+
       - name: Descargar_GCC_Lineage
         run: |
-          # Estos siguen siendo públicos, pero por si acaso forzamos la URL limpia
           git clone --depth 1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git /gcc64
           git clone --depth 1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git /gcc32
 
       - name: Descargar_Fuentes_IverCoder
         run: |
-          # Usamos tu link directo
+          # Usamos tu fork con la rama upstreaming
           git clone --depth 1 -b upstreaming https://github.com/brunoxd-crypto/android_kernel_samsung_a3core.git /source
 
-      - name: Compilar_Con_Neutron
+      - name: Compilar_Con_ZyC_V13
         run: |
-          # Ajustamos el PATH al nuevo compilador
           export PATH="/zyc/bin:/gcc64/bin:/gcc32/bin:$PATH"
           cd /source
           mkdir -p out
           
-          # Configurar
+          # 1. Configurar
           make O=out ARCH=arm64 a3core_eur_open_defconfig
           
-          # Parche Stack Protector
+          # 2. Parche Stack Protector (Crucial para kernels 4.14 con Clang moderno)
           sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/g' out/.config
           echo "CONFIG_CC_STACKPROTECTOR_NONE=y" >> out/.config
 
-          # Compilación
+          # 3. Compilación Principal
           make -j$(nproc) O=out \
               ARCH=arm64 \
               CC=clang \
@@ -65,6 +62,7 @@ jobs:
               NM=aarch64-linux-android-nm \
               STRIP=aarch64-linux-android-strip \
               OBJCOPY=aarch64-linux-android-objcopy \
+              OBJDUMP=aarch64-linux-android-objdump \
               KCFLAGS="-w" \
               V=1
 
@@ -72,5 +70,5 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel_A03_Upstreaming_V11
+          name: Kernel_A03_IverCoder_ZyC
           path: /source/out/arch/arm64/boot/Image*
