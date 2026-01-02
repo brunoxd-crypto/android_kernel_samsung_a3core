@@ -1,4 +1,4 @@
-name: Compilar_Kernel_A03_IverCoder_Zyc_V9
+name: Compilar_Kernel_A03_IverCoder_Zyc_V10
 on:
   workflow_dispatch:
 
@@ -18,18 +18,22 @@ jobs:
             make zip liblz4-tool lzop curl wget
           ln -sf /usr/bin/python2 /usr/bin/python
 
-      - name: Descargar_Herramientas
+      - name: Descargar_Herramientas_Con_Parche_Protocolo
         run: |
-          # Usamos URLs HTTPS directas que no piden usuario
+          # FORZAR HTTPS: Esto evita el error de "Could not read username"
+          git config --global url."https://github.com/".insteadOf git@github.com:
+          git config --global url."https://".insteadOf git://
+
+          # Descargar ZyC-Clang sin submódulos problemáticos primero
           git clone --depth 1 https://github.com/ZyC-S/ZyC-Clang.git /zyc
+          
+          # Descargar GCC Toolchains
           git clone --depth 1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git /gcc64
           git clone --depth 1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git /gcc32
 
-      - name: Descargar_Fuentes_Desde_Tu_Fork
+      - name: Descargar_Fuentes_IverCoder
         run: |
-          # He puesto la URL base. Por favor, asegúrate de que el link sea:
-          # https://github.com/TU_NOMBRE_DE_USUARIO/android_kernel_samsung_a3core.git
-          # Simplemente cambia 'brunoxd-crypto' por tu nombre de usuario real abajo:
+          # Asegúrate de que brunoxd-crypto sea tu usuario actual de GitHub
           git clone --depth 1 -b upstreaming https://github.com/brunoxd-crypto/android_kernel_samsung_a3core.git /source
 
       - name: Compilar_Con_Zyc_Clang
@@ -38,14 +42,15 @@ jobs:
           cd /source
           mkdir -p out
           
-          # 1. Configurar
+          # Configurar
           make O=out ARCH=arm64 a3core_eur_open_defconfig
           
-          # 2. Parche Stack Protector
+          # Parche Stack Protector
           sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/g' out/.config
           echo "CONFIG_CC_STACKPROTECTOR_NONE=y" >> out/.config
 
-          # 3. Compilación Principal con Zyc
+          # Compilación Final
+          # Si Zyc te pide binutils, usamos las de GCC 64 que ya bajamos
           make -j$(nproc) O=out \
               ARCH=arm64 \
               CC=clang \
@@ -61,9 +66,9 @@ jobs:
               KCFLAGS="-w" \
               V=1
 
-      - name: Subir_Kernel_Listo
+      - name: Subir_Kernel
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel_A03_Zyc_Upstreaming
+          name: Kernel_A03_Zyc_V10
           path: /source/out/arch/arm64/boot/Image*
