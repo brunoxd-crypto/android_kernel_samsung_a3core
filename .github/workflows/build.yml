@@ -1,4 +1,4 @@
-name: Compilar_Kernel_A03_IverCoder_Zyc_V8
+name: Compilar_Kernel_A03_IverCoder_Zyc_V9
 on:
   workflow_dispatch:
 
@@ -20,15 +20,16 @@ jobs:
 
       - name: Descargar_Herramientas
         run: |
-          # Descargamos Zyc Clang (El que funcionó con MTK)
+          # Usamos URLs HTTPS directas que no piden usuario
           git clone --depth 1 https://github.com/ZyC-S/ZyC-Clang.git /zyc
-          # Herramientas de lincado GCC de LineageOS
           git clone --depth 1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git /gcc64
           git clone --depth 1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git /gcc32
 
-      - name: Descargar_Tu_Fork
+      - name: Descargar_Fuentes_Desde_Tu_Fork
         run: |
-          # REEMPLAZA 'TU_USUARIO' por tu nombre de usuario de GitHub
+          # He puesto la URL base. Por favor, asegúrate de que el link sea:
+          # https://github.com/TU_NOMBRE_DE_USUARIO/android_kernel_samsung_a3core.git
+          # Simplemente cambia 'brunoxd-crypto' por tu nombre de usuario real abajo:
           git clone --depth 1 -b upstreaming https://github.com/brunoxd-crypto/android_kernel_samsung_a3core.git /source
 
       - name: Compilar_Con_Zyc_Clang
@@ -37,15 +38,14 @@ jobs:
           cd /source
           mkdir -p out
           
-          # 1. Configurar usando el archivo que confirmamos en la captura
+          # 1. Configurar
           make O=out ARCH=arm64 a3core_eur_open_defconfig
           
-          # 2. Parche Stack Protector para compatibilidad con Clang
+          # 2. Parche Stack Protector
           sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/g' out/.config
           echo "CONFIG_CC_STACKPROTECTOR_NONE=y" >> out/.config
 
-          # 3. Compilación Principal
-          # Usamos las herramientas de lincado de Google para evitar que el comando se corte
+          # 3. Compilación Principal con Zyc
           make -j$(nproc) O=out \
               ARCH=arm64 \
               CC=clang \
@@ -65,5 +65,5 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel_A03_Zyc_Final
+          name: Kernel_A03_Zyc_Upstreaming
           path: /source/out/arch/arm64/boot/Image*
