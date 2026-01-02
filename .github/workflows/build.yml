@@ -1,0 +1,72 @@
+name: Compilar_Kernel_A03_V12_Final
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
+
+    steps:
+      - name: Instalar_Dependencias
+        run: |
+          apt-get update
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get install -y git build-essential bc bison flex libssl-dev \
+            libncurses5-dev libncurses5 libtinfo5 python3 python2 \
+            make zip liblz4-tool lzop curl wget tar
+          ln -sf /usr/bin/python2 /usr/bin/python
+
+      - name: Descargar_Proton_Clang_Directo
+        run: |
+          # Bajamos el binario compilado para evitar errores de Git
+          mkdir -p /proton
+          curl -LSs https://github.com/kdrag0n/proton-clang/archive/refs/heads/master.tar.gz | tar -xzC /proton --strip-components=1
+
+      - name: Descargar_GCC_Lineage
+        run: |
+          # Clonamos con una profundidad mínima para evitar errores de red
+          git clone --depth 1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git /gcc64
+          git clone --depth 1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git /gcc32
+
+      - name: Descargar_Fuentes_IverCoder
+        run: |
+          git clone --depth 1 -b upstreaming https://github.com/brunoxd-crypto/android_kernel_samsung_a3core.git /source
+
+      - name: Compilar_Con_Clang_V12
+        run: |
+          export PATH="/proton/bin:/gcc64/bin:/gcc32/bin:$PATH"
+          cd /source
+          mkdir -p out
+          
+          # 1. Configurar
+          make O=out ARCH=arm64 a3core_eur_open_defconfig
+          
+          # 2. Parche Stack Protector
+          sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/g' out/.config
+          echo "CONFIG_CC_STACKPROTECTOR_NONE=y" >> out/.config
+
+          # 3. Compilación Principal
+          # Usamos las herramientas de lincado de LineageOS que son ultra estables
+          make -j$(nproc) O=out \
+              ARCH=arm64 \
+              CC=clang \
+              CLANG_TRIPLE=aarch64-linux-gnu- \
+              CROSS_COMPILE=aarch64-linux-android- \
+              CROSS_COMPILE_ARM32=arm-linux-androideabi- \
+              LD=aarch64-linux-android-ld \
+              AR=aarch64-linux-android-ar \
+              NM=aarch64-linux-android-nm \
+              STRIP=aarch64-linux-android-strip \
+              OBJCOPY=aarch64-linux-android-objcopy \
+              OBJDUMP=aarch64-linux-android-objdump \
+              KCFLAGS="-w" \
+              V=1
+
+      - name: Subir_Resultado
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel_A03_Upstreaming_V12
+          path: /source/out/arch/arm64/boot/Image*
