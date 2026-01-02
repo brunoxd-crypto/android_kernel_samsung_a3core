@@ -1,4 +1,4 @@
-name: Compilar_Kernel_A03_V13_ZyC_Release
+name: Compilar_Kernel_A03_V12_Final
 on:
   workflow_dispatch:
 
@@ -18,39 +18,37 @@ jobs:
             make zip liblz4-tool lzop curl wget tar
           ln -sf /usr/bin/python2 /usr/bin/python
 
-      - name: Descargar_ZyC_Clang_desde_Release
+      - name: Descargar_Proton_Clang_Directo
         run: |
-          # Usamos un release estable (ejemplo: versión 14 o 17 según disponibilidad)
-          # Este link es directo al binario comprimido para evitar errores de Git
-          mkdir -p /zyc
-          curl -LSs https://github.com/ZyC-S/ZyC-Clang/releases/download/17.0.0-20230904-release/ZyC-Clang-17.0.0-20230904-release.tar.gz | tar -xzC /zyc
-          # Verificamos que el binario exista
-          ls /zyc/bin/clang
+          # Bajamos el binario compilado para evitar errores de Git
+          mkdir -p /proton
+          curl -LSs https://github.com/kdrag0n/proton-clang/archive/refs/heads/master.tar.gz | tar -xzC /proton --strip-components=1
 
       - name: Descargar_GCC_Lineage
         run: |
+          # Clonamos con una profundidad mínima para evitar errores de red
           git clone --depth 1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git /gcc64
           git clone --depth 1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git /gcc32
 
       - name: Descargar_Fuentes_IverCoder
         run: |
-          # Usamos tu fork con la rama upstreaming
           git clone --depth 1 -b upstreaming https://github.com/brunoxd-crypto/android_kernel_samsung_a3core.git /source
 
-      - name: Compilar_Con_ZyC_V13
+      - name: Compilar_Con_Clang_V12
         run: |
-          export PATH="/zyc/bin:/gcc64/bin:/gcc32/bin:$PATH"
+          export PATH="/proton/bin:/gcc64/bin:/gcc32/bin:$PATH"
           cd /source
           mkdir -p out
           
           # 1. Configurar
           make O=out ARCH=arm64 a3core_eur_open_defconfig
           
-          # 2. Parche Stack Protector (Crucial para kernels 4.14 con Clang moderno)
+          # 2. Parche Stack Protector
           sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/g' out/.config
           echo "CONFIG_CC_STACKPROTECTOR_NONE=y" >> out/.config
 
           # 3. Compilación Principal
+          # Usamos las herramientas de lincado de LineageOS que son ultra estables
           make -j$(nproc) O=out \
               ARCH=arm64 \
               CC=clang \
@@ -70,5 +68,5 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel_A03_IverCoder_ZyC
+          name: Kernel_A03_Upstreaming_V12
           path: /source/out/arch/arm64/boot/Image*
